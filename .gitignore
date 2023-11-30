@@ -11,5 +11,5 @@
 __pycache__/
 build/
 dist/
-paneltime.egg-info/
+paneltime_mp.egg-info/
 *.DS_Store
