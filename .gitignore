@@ -1,0 +1,15 @@
+*.egg-info
+*.csv
+*.pyc'
+*.exp
+*.lib
+*.c
+*.html
+*.obj
+.vs/
+.vscode/
+__pycache__/
+build/
+dist/
+paneltime.egg-info/
+*.DS_Store
