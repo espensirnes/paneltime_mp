@@ -7,7 +7,7 @@ https://packaging.python.org/en/latest/distributing.html
 https://github.com/pypa/sampleproject
 """
 
-version='0.0.1'
+version='0.0.2'
 
 from setuptools import setup, find_packages
 from codecs import open
