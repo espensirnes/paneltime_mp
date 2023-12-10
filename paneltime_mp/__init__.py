@@ -13,13 +13,12 @@ from . import transact
 
 class Master():
 	"""A class that handles multi processing"""
-	def __init__(self, n, import_dir):
+	def __init__(self, n):
 		"""module is a string with the name of the modulel where the
 		functions you are going to run are """
 
 		self.fpath = os.path.join(tempfile.gettempdir(),'mp')
 		os.makedirs(self.fpath, exist_ok=True)
-		self.import_dir = import_dir
 		self.n_slaves = n
 		self.slaves=[slave() for i in range(n)]
 		self.q = Queue()
@@ -90,12 +89,6 @@ Slave PIDs: %s"""  %(n,os.getpid(),', '.join(pids))
 			d[s] = ds			
 			self.active_processes -= 1
 		return d
-	
-	def import_module(self, name):
-		tasks = [os.path.join(self.import_dir, name)]*self.n_slaves
-		self.run(tasks, 'import')
-	
-
 
 class slave():
 	"""Creates a slave"""
