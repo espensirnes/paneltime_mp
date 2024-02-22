@@ -4,6 +4,7 @@
 import os
 import sys
 import subprocess
+import socket
 import pickle
 from queue import Queue
 from threading import Thread
@@ -25,7 +26,7 @@ class Master():
 		self.active_processes = 0
 		pids=[]
 		for i in range(n):
-			self.slaves[i].confirm(i,self.fpath) 
+			self.slaves[i].confirm(i) 
 			pid=str(self.slaves[i].p_id)
 			if int(i/5.0)==i/5.0:
 				pid='\n'+pid
@@ -81,13 +82,23 @@ Slave PIDs: %s"""  %(n,os.getpid(),', '.join(pids))
 	def eval(self, task):
 		self.run(task, 'eval')
 
-	def collect(self):
+	def collect(self, force_quit = False):
 		"""Waiting and collecting the sent tasks. """
 		d = {}
-		while self.active_processes>0:	
-			ds,s = self.q.get()
-			d[s] = ds			
-			self.active_processes -= 1
+
+		while self.active_processes>0:
+			try:
+				if force_quit:
+					ds,s = self.q.get(timeout=1)
+				else:
+					ds,s = self.q.get()
+				self.active_processes -= 1
+				d[s] = ds	
+			except:
+				if force_quit:
+					for s in range(len(self.slaves)):
+						if not s in d:
+							self.slaves[s].kill()
 		return d
 
 class slave():
@@ -102,15 +113,16 @@ class slave():
 
 		self.p = subprocess.Popen(self.command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 		os.chdir(cwdr)
-		self.t=transact.Transact(self.p.stdout,self.p.stdin)
+		self.t=transact.Transact(self.p.stdout,self.p.stdin, False)
+		self.connected = False
 		
-	def confirm(self,slave_id,fpath):
+	def confirm(self,slave_id):
 		self.p_id = self.receive()
+		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 		self.slave_id=slave_id
-		self.send('init_transact',
-							(slave_id, os.path.join(fpath, f''), )
-							)
-		self.fpath=fpath
+		self.send('init_transact',slave_id)
+		self.host = self.receive()
+		self.send('OK',None)
 		pass
 
 	def send(self,msg,obj):
@@ -126,9 +138,23 @@ class slave():
 			return answ
 		q.put((self.t.receive(),self.slave_id))
 
+	def connect(self):
+		if self.connected:
+			return
+		for i in range(100):
+			try:
+				self.socket.connect(self.host)
+				self.connected = True
+				break
+			except ConnectionRefusedError:
+				pass
 
 	def kill(self):
-		self.p.kill()
+		self.connect()
+		self.socket.sendall(b"STOP")
+
+			
+
 
 
 

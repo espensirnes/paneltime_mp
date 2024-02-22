@@ -4,13 +4,17 @@
 
 import pickle
 import datetime
+import tempfile
+import os
 
 
 class Transact():
 	"""Local worker class"""
-	def __init__(self,read, write):
+	def __init__(self,read, write, is_slave):
 		self.r = read
 		self.w = write
+		self.fpath = os.path.join(tempfile.gettempdir(),'mp')
+		self.is_slave = is_slave
 
 	def send(self,msg):
 		w=getattr(self.w,'buffer',self.w)
@@ -30,8 +34,8 @@ class Transact():
 			return u.load()
 		except EOFError as e:
 			if e.args[0]=='Ran out of input':
-				raise RuntimeError("""An error occured in one of the spawned sub-processes. 
-Check the output in the folder "mp' in your temp directory or 
+				raise RuntimeError(f"""An error occured in one of the spawned sub-processes. 
+Check the output in '{self.fpath}' or 
 run without multiprocessing\n %s""" %(datetime.datetime.now()))
 			else:
 				raise RuntimeError('EOFError:'+e.args[0])

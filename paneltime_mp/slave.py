@@ -11,16 +11,47 @@ import time
 import gc
 import transact
 import sys
+import socket
+import threading
+
 import importlib
 
 import importlib.util
 import importlib.machinery
 
 
-class Session:
-	def __init__(self, t, s_id, f):
+class SlaveServer:
+	def __init__(self,i):
+		self.host = '127.0.0.1'
+		self.port = 64512 + i
+		self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+		self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+		self.socket.bind((self.host, self.port))
+		self.socket.listen(1)
+		threading.Thread(target=self.accept, daemon=True).start()
+		self.connection = None
+		self.f = f
 
+	def accept(self):
+		self.connection, self.address = self.socket.accept()
+
+	def kill_request(self):
+		if self.connection is None:
+			return False
+		self.connection.setblocking(0)
+		try:
+			command = self.connection.recv(1024).decode('utf-8')
+		except BlockingIOError:
+			return False
+		return command == "STOP"
+
+    
+
+
+class Session:
+	def __init__(self, t, s_id, f, server):
 		self.d=dict()
+		self.d['slave_server'] = server
 		while 1:
 			(msg,obj) = t.receive()
 			response=None
@@ -31,8 +62,8 @@ class Session:
 				self.dict(obj)
 			elif msg=='exec':				
 				self.exec(f, obj)
-			elif msg=='eval':				
-				response = self.eval(f, obj)		
+			elif msg=='eval':	
+				response = self.eval(f, obj)			
 			else:
 				raise RuntimeError('No valid directive supplied')
 			t.send(response)		
@@ -58,6 +89,8 @@ class Session:
 		
 		sys.stdout = f
 		response = eval(obj,globals(),self.d)
+		response = dict(response)
+		response.pop('slave_server')
 		sys.stdout = sys.__stdout__
 		return response	
 
@@ -73,15 +106,22 @@ def write(f,txt):
 	
 
 try: 
-
-	t = transact.Transact(sys.stdin, sys.stdout)
+	
+	t = transact.Transact(sys.stdin, sys.stdout, True)
+	fname=os.path.join(t.fpath,f'thread.txt')
+	f = open(fname, 'w')	
+	
 	#Handshake:
 	t.send(os.getpid())
-	msg,(s_id,fpath) = t.receive()
-	#Wait for instructions:
-	fname=os.path.join(fpath,'thread %s.txt' %(s_id,))
+	msg, s_id = t.receive()
+	server = SlaveServer(s_id)
+	t.send((server.host, server.port))
+	msg, _ = t.receive()
+	fname=os.path.join(t.fpath,f'thread {s_id}.txt')
 	f = open(fname, 'w')	
-	Session(t, s_id, f)
+	#Wait for instructions:
+
+	Session(t, s_id, f, server)
 except Exception as e:
 	
 	f.write('SID: %s      TIME:%s \n' %(s_id,datetime.datetime.now()))
