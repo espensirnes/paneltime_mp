@@ -13,6 +13,7 @@ import transact
 import sys
 import socket
 import threading
+from queue import Queue
 
 import importlib
 
@@ -28,25 +29,31 @@ class SlaveServer:
 		self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 		self.socket.bind((self.host, self.port))
 		self.socket.listen(1)
+		self.output_queue = Queue()
 		threading.Thread(target=self.accept, daemon=True).start()
 		self.connection = None
 		self.f = f
+		
 
 	def accept(self):
-		self.connection, self.address = self.socket.accept()
+		connection, address = self.socket.accept()
+		connection.settimeout(3.0)
+		self.output_queue.put((connection, address))
 
 	def kill_request(self):
+
 		if self.connection is None:
-			return False
+			self.connection, self.address = self.output_queue.get()
+		write(f,self.connection)
+		write(f, 'connected from slave')
 		self.connection.setblocking(0)
 		try:
 			command = self.connection.recv(1024).decode('utf-8')
-		except BlockingIOError:
+			write(f, 'command:')
+			write(f, command)
+		except (socket.timeout, BlockingIOError) as e:
 			return False
 		return command == "STOP"
-
-    
-
 
 class Session:
 	def __init__(self, t, s_id, f, server):
@@ -81,17 +88,19 @@ class Session:
 		sys.stdout = f
 		t = time.time()
 		exec(obj,globals(),self.d)
-		print(f'Procedure: {obj} \nTime used: {time.time()-t}')
 		sys.stdout = sys.__stdout__	
+		write(f, f'exec: {obj} \nTime used: {time.time()-t}')
+
 
 	
 	def eval(self, f, obj):
-		
+		t = time.time()
 		sys.stdout = f
 		response = eval(obj,globals(),self.d)
 		response = dict(response)
 		response.pop('slave_server')
 		sys.stdout = sys.__stdout__
+		write(f, f'eval: {obj} \nTime used: {time.time()-t}')
 		return response	
 
 

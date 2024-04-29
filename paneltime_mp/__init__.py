@@ -85,16 +85,19 @@ Slave PIDs: %s"""  %(n,os.getpid(),', '.join(pids))
 	def collect(self, force_quit = False):
 		"""Waiting and collecting the sent tasks. """
 		d = {}
-
+		t = time.time()
+		MAXTIME = 8
 		while self.active_processes>0:
 			try:
 				if force_quit:
-					ds,s = self.q.get(timeout=1)
+					dt = time.time()-t
+					ds,s = self.q.get(timeout=max((MAXTIME-dt,1)))
 				else:
 					ds,s = self.q.get()
 				self.active_processes -= 1
 				d[s] = ds	
-			except:
+			except Exception as e:
+				print(e)
 				if force_quit:
 					for s in range(len(self.slaves)):
 						if not s in d:
